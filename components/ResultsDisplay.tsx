@@ -1,9 +1,7 @@
-
 import React from 'react';
-import { Persona, PersonaConfiguration, DialogueTurn } from '../types';
+import { Persona, PersonaConfiguration } from '../types';
 import { AnalysisDetails } from './AnalysisDetails';
 import { PersonaOutput } from './PersonaOutput';
-import { ShowFlowEditor } from './DialogueGenerator';
 import { PersonaBuilder } from './PersonaBuilder';
 import { SparklesIcon } from './icons/SparklesIcon';
 
@@ -12,31 +10,11 @@ interface ResultsDisplayProps {
     isLoading: boolean;
     error: string | null;
     showWelcome: boolean;
-    // Comparison props
-    comparisonSelection: string[];
-    onToggleCompare: (personaId: string) => void;
+    // Selection props
+    selection: string[];
+    onToggleSelection: (personaId: string) => void;
+    onLaunchStudio: () => void;
     setIsComparisonModalOpen: (isOpen: boolean) => void;
-    // Dialogue props
-    dialogueTopic: string;
-    setDialogueTopic: (topic: string) => void;
-    showContext: string;
-    setShowContext: (context: string) => void;
-    showLength: string;
-    setShowLength: (length: string) => void;
-    handleGenerateDialogue: () => void;
-    isGeneratingDialogue: boolean;
-    // Script Refinement props
-    script: DialogueTurn[];
-    viewMode: 'editor' | 'final';
-    setViewMode: (mode: 'editor' | 'final') => void;
-    editingTurnId: string | null;
-    setEditingTurnId: (id: string | null) => void;
-    refinePrompt: string;
-    setRefinePrompt: (prompt: string) => void;
-    handleRefineTurn: () => void;
-    isRefining: string | null;
-    handleGenerateNextTurn: () => void;
-    isAddingLine: boolean;
     // Persona Builder Props
     editingPersonaId: string | null;
     onEdit: (personaId: string) => void;
@@ -77,8 +55,7 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = (props) => {
     const { 
         personas, isLoading, error, showWelcome,
         editingPersonaId, onEdit, onCancel, onSave, onDelete,
-        comparisonSelection, onToggleCompare, setIsComparisonModalOpen,
-        ...rest
+        selection, onToggleSelection, onLaunchStudio, setIsComparisonModalOpen
     } = props;
 
     const renderContent = () => {
@@ -91,29 +68,38 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = (props) => {
                  <div className="space-y-8">
                     {personas.length > 1 && (
                         <div className="bg-[#333e48] rounded-xl shadow-lg p-6">
-                            <h2 className="text-2xl font-bold text-[#e2a32d] mb-2">Compare Personas</h2>
-                            <p className="text-[#95aac0] mb-4 text-sm">Select two personas to see a side-by-side comparison of their analysis.</p>
+                            <h2 className="text-2xl font-bold text-[#e2a32d] mb-2">Engage with Personas</h2>
+                            <p className="text-[#95aac0] mb-4 text-sm">Select two personas to compare them or to generate a dialogue in the studio.</p>
                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 mb-4">
                                 {personas.map(persona => (
-                                    <label key={persona.id} className={`flex items-center space-x-3 bg-[#212934] p-3 rounded-lg cursor-pointer hover:bg-[#2b3542] transition-colors border-2 ${comparisonSelection.includes(persona.id) ? 'border-[#e2a32d]' : 'border-transparent'}`}>
+                                    <label key={persona.id} className={`flex items-center space-x-3 bg-[#212934] p-3 rounded-lg cursor-pointer hover:bg-[#2b3542] transition-colors border-2 ${selection.includes(persona.id) ? 'border-[#e2a32d]' : 'border-transparent'}`}>
                                         <input
                                             type="checkbox"
-                                            checked={comparisonSelection.includes(persona.id)}
-                                            onChange={() => onToggleCompare(persona.id)}
-                                            disabled={!comparisonSelection.includes(persona.id) && comparisonSelection.length >= 2}
+                                            checked={selection.includes(persona.id)}
+                                            onChange={() => onToggleSelection(persona.id)}
+                                            disabled={!selection.includes(persona.id) && selection.length >= 2}
                                             className="form-checkbox h-5 w-5 rounded bg-[#5c6f7e] border-[#95aac0] text-[#c36e26] focus:ring-[#e2a32d] disabled:opacity-50 disabled:cursor-not-allowed"
                                         />
                                         <span className="font-medium text-gray-200">{persona.name}</span>
                                     </label>
                                 ))}
                             </div>
-                            <button
-                                onClick={() => setIsComparisonModalOpen(true)}
-                                disabled={comparisonSelection.length !== 2}
-                                className="px-5 py-2 bg-[#c36e26] text-white font-semibold rounded-lg shadow-md hover:bg-[#e2a32d] disabled:bg-[#5c6f7e] disabled:cursor-not-allowed transition-all duration-200"
-                            >
-                                Compare Selected ({comparisonSelection.length}/2)
-                            </button>
+                            <div className="flex flex-wrap gap-4">
+                                <button
+                                    onClick={() => setIsComparisonModalOpen(true)}
+                                    disabled={selection.length !== 2}
+                                    className="px-5 py-2 bg-[#5c6f7e] text-white font-semibold rounded-lg shadow-md hover:bg-[#95aac0] disabled:bg-[#333e48] disabled:cursor-not-allowed transition-all duration-200"
+                                >
+                                    Compare Selected ({selection.length}/2)
+                                </button>
+                                <button
+                                    onClick={onLaunchStudio}
+                                    disabled={selection.length !== 2}
+                                    className="px-5 py-2 bg-[#c36e26] text-white font-semibold rounded-lg shadow-md hover:bg-[#e2a32d] disabled:bg-[#5c6f7e] disabled:cursor-not-allowed transition-all duration-200"
+                                >
+                                    Dialogue Studio ({selection.length}/2)
+                                </button>
+                            </div>
                         </div>
                     )}
 
@@ -148,32 +134,6 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = (props) => {
                             </div>
                         )
                     })}
-
-                    <ShowFlowEditor
-                        personas={personas}
-                        dialogueTopic={rest.dialogueTopic}
-                        setDialogueTopic={rest.setDialogueTopic}
-                        showContext={rest.showContext}
-                        setShowContext={rest.setShowContext}
-                        showLength={rest.showLength}
-                        setShowLength={rest.setShowLength}
-                        onGenerate={rest.handleGenerateDialogue}
-                        isGenerating={rest.isGeneratingDialogue}
-                        
-                        script={rest.script}
-                        viewMode={rest.viewMode}
-                        setViewMode={rest.setViewMode}
-                        editingTurnId={rest.editingTurnId}
-                        setEditingTurnId={rest.setEditingTurnId}
-                        refinePrompt={rest.refinePrompt}
-                        setRefinePrompt={rest.setRefinePrompt}
-                        onRefine={rest.handleRefineTurn}
-                        isRefining={rest.isRefining}
-                        onAddLine={rest.handleGenerateNextTurn}
-                        isAddingLine={rest.isAddingLine}
-
-                        isDisabled={editingPersonaId !== null || personas.length < 2}
-                    />
                     
                     {error && !isLoading && <div className="mt-8"><ErrorState error={error} /></div>}
                 </div>

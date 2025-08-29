@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { PersonaConfiguration } from '../types';
 import { IdeationalIcon } from './icons/IdeationalIcon';
@@ -13,7 +12,7 @@ interface PersonaOutputProps {
     personaName: string;
     config: PersonaConfiguration;
     onEdit: () => void;
-    onDelete: () => void;
+    onDelete?: () => void;
 }
 
 const SettingItem: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
@@ -53,14 +52,16 @@ export const PersonaOutput: React.FC<PersonaOutputProps> = ({ personaName, confi
                         <ClipboardIcon className="w-4 h-4" />
                         {copied ? 'Copied!' : 'JSON'}
                     </button>
-                    <button
-                        onClick={onDelete}
-                        title="Delete Persona"
-                        className="flex items-center gap-2 px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors"
-                    >
-                        <XCircleIcon className="w-4 h-4" />
-                        Delete
-                    </button>
+                    {onDelete && (
+                         <button
+                            onClick={onDelete}
+                            title="Delete Persona"
+                            className="flex items-center gap-2 px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors"
+                        >
+                            <XCircleIcon className="w-4 h-4" />
+                            Delete
+                        </button>
+                    )}
                 </div>
             </div>
 

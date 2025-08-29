@@ -1,14 +1,14 @@
-
 import React, { useState, useCallback, useEffect } from 'react';
 import { DocumentInput } from './components/DocumentInput';
 import { ResultsDisplay } from './components/ResultsDisplay';
-import { analyzeDocument, generateDialogue, refineDialogueTurn, generateNextDialogueTurn, getAvailableModels } from './services/geminiService';
-import { FullAnalysisResult, PersonaConfiguration, Persona, DialogueTurn } from './types';
+import { analyzeDocument, getAvailableModels } from './services/geminiService';
+import { PersonaConfiguration, Persona } from './types';
 import { SparklesIcon } from './components/icons/SparklesIcon';
 import { HelpIcon } from './components/icons/HelpIcon';
 import { HelpMenu } from './components/HelpMenu';
 import { ModelSettings } from './components/ModelSettings';
 import { PersonaComparison } from './components/PersonaComparison';
+import { DialogueStudio } from './components/DialogueStudio';
 
 const App: React.FC = () => {
     const [personas, setPersonas] = useState<Persona[]>([]);
@@ -16,6 +16,10 @@ const App: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [showWelcome, setShowWelcome] = useState<boolean>(true);
     const [isHelpOpen, setIsHelpOpen] = useState(false);
+
+    // View management
+    const [currentView, setCurrentView] = useState<'main' | 'dialogueStudio'>('main');
+    const [dialoguePersonas, setDialoguePersonas] = useState<[Persona, Persona] | null>(null);
 
     // Model settings state
     const [serviceProvider, setServiceProvider] = useState<string>('Gemini');
@@ -25,26 +29,12 @@ const App: React.FC = () => {
     const [model, setModel] = useState<string>('gemini-2.5-flash');
     const [thinkingBudget, setThinkingBudget] = useState<string>(''); // Keep as string for input control
 
-    // Dialogue generation state
-    const [dialogueTopic, setDialogueTopic] = useState<string>('');
-    const [showContext, setShowContext] = useState<string>('');
-    const [showLength, setShowLength] = useState<string>('Short (1-3 mins)');
-    const [isGeneratingDialogue, setIsGeneratingDialogue] = useState<boolean>(false);
-
-    // Script refinement state
-    const [script, setScript] = useState<DialogueTurn[]>([]);
-    const [viewMode, setViewMode] = useState<'editor' | 'final'>('editor');
-    const [editingTurnId, setEditingTurnId] = useState<string | null>(null);
-    const [refinePrompt, setRefinePrompt] = useState('');
-    const [isRefining, setIsRefining] = useState<string | null>(null); // holds turnId being refined
-    const [isAddingLine, setIsAddingLine] = useState<boolean>(false);
-
     // Persona builder state
     const [editingPersonaId, setEditingPersonaId] = useState<string | null>(null);
     const [draftConfig, setDraftConfig] = useState<PersonaConfiguration | null>(null);
 
-    // Persona comparison state
-    const [comparisonSelection, setComparisonSelection] = useState<string[]>([]);
+    // Persona selection state (for comparison or dialogue)
+    const [selection, setSelection] = useState<string[]>([]);
     const [isComparisonModalOpen, setIsComparisonModalOpen] = useState(false);
 
 
@@ -89,7 +79,7 @@ const App: React.FC = () => {
         };
 
         fetchModels();
-    }, [serviceProvider]);
+    }, [serviceProvider, model, availableModels]);
 
     const handleAnalyze = useCallback(async (text: string) => {
         if (!text.trim()) {
@@ -99,9 +89,8 @@ const App: React.FC = () => {
         setIsLoading(true);
         setError(null);
         setShowWelcome(false);
-        setScript([]);
         setEditingPersonaId(null);
-        setComparisonSelection([]);
+        setSelection([]);
 
         try {
             const result = await analyzeDocument(text, model, parseThinkingBudget(thinkingBudget));
@@ -121,125 +110,6 @@ const App: React.FC = () => {
             setIsLoading(false);
         }
     }, [personas.length, model, thinkingBudget, parseThinkingBudget]);
-
-    const parseDialogueToScript = (dialogue: string, personaA: Persona, personaB: Persona): DialogueTurn[] => {
-        const turns: DialogueTurn[] = [];
-        const lines = dialogue.split('\n').filter(line => line.trim() !== '');
-        
-        lines.forEach((line, index) => {
-            const matchA = line.match(/^Speaker A:\s*(.*)/);
-            const matchB = line.match(/^Speaker B:\s*(.*)/);
-
-            if (matchA) {
-                turns.push({ id: `turn-${Date.now()}-${index}`, speaker: 'Speaker A', personaName: personaA.name, text: matchA[1].trim() });
-            } else if (matchB) {
-                turns.push({ id: `turn-${Date.now()}-${index}`, speaker: 'Speaker B', personaName: personaB.name, text: matchB[1].trim() });
-            }
-        });
-        return turns;
-    };
-
-
-    const handleGenerateDialogue = useCallback(async () => {
-        if (personas.length < 2) return;
-         if (!dialogueTopic.trim()) {
-            setError("Please enter a dialogue topic.");
-            return;
-        }
-        setIsGeneratingDialogue(true);
-        setScript([]);
-        setError(null);
-        setViewMode('editor');
-
-        try {
-            const configs: [PersonaConfiguration, PersonaConfiguration] = [
-                personas[0].analysis.personaConfiguration,
-                personas[1].analysis.personaConfiguration
-            ];
-            const dialogue = await generateDialogue(configs, dialogueTopic, showContext, showLength, model, parseThinkingBudget(thinkingBudget));
-            const structuredScript = parseDialogueToScript(dialogue, personas[0], personas[1]);
-            setScript(structuredScript);
-        } catch (e) {
-             if (e instanceof Error) {
-                setError(`Dialogue generation failed: ${e.message}`);
-            } else {
-                setError('An unknown error occurred during dialogue generation.');
-            }
-        } finally {
-            setIsGeneratingDialogue(false);
-        }
-    }, [dialogueTopic, personas, showContext, showLength, model, thinkingBudget, parseThinkingBudget]);
-    
-    const handleRefineTurn = async () => {
-        if (!editingTurnId || !refinePrompt.trim()) return;
-        
-        const turnToRefine = script.find(t => t.id === editingTurnId);
-        if (!turnToRefine) return;
-        
-        setIsRefining(editingTurnId);
-        setError(null);
-
-        try {
-            const personaConfig = turnToRefine.speaker === 'Speaker A' 
-                ? personas[0].analysis.personaConfiguration 
-                : personas[1].analysis.personaConfiguration;
-            
-            const refinedText = await refineDialogueTurn(turnToRefine.text, personaConfig, refinePrompt, model, parseThinkingBudget(thinkingBudget));
-
-            setScript(prevScript => prevScript.map(turn => 
-                turn.id === editingTurnId ? { ...turn, text: refinedText } : turn
-            ));
-            
-            setEditingTurnId(null);
-            setRefinePrompt('');
-
-        } catch (e) {
-            if (e instanceof Error) {
-                setError(`Refinement failed: ${e.message}`);
-            } else {
-                setError('An unknown error occurred during refinement.');
-            }
-        } finally {
-            setIsRefining(null);
-        }
-    };
-    
-    const handleGenerateNextTurn = async () => {
-        if (script.length === 0) return;
-        
-        setIsAddingLine(true);
-        setError(null);
-        
-        try {
-            const lastTurn = script[script.length - 1];
-            const nextSpeaker = lastTurn.speaker === 'Speaker A' ? 'Speaker B' : 'Speaker A';
-            const nextPersona = nextSpeaker === 'Speaker A' ? personas[0] : personas[1];
-            const nextSpeakerConfig = nextPersona.analysis.personaConfiguration;
-            
-            const history = script.slice(-4); // Use last 4 turns for context
-            
-            const newText = await generateNextDialogueTurn(history, nextSpeaker, nextSpeakerConfig, model, parseThinkingBudget(thinkingBudget));
-            
-            const newTurn: DialogueTurn = {
-                id: `turn-${Date.now()}`,
-                speaker: nextSpeaker,
-                personaName: nextPersona.name,
-                text: newText,
-            };
-            
-            setScript(prev => [...prev, newTurn]);
-
-        } catch (e) {
-            if (e instanceof Error) {
-                setError(`Failed to add line: ${e.message}`);
-            } else {
-                setError('An unknown error occurred while adding a new line.');
-            }
-        } finally {
-            setIsAddingLine(false);
-        }
-    };
-
 
     const handleEdit = (personaId: string) => {
         const personaToEdit = personas.find(p => p.id === personaId);
@@ -274,12 +144,12 @@ const App: React.FC = () => {
     const handleDelete = (personaId: string) => {
         if (window.confirm("Are you sure you want to delete this persona?")) {
             setPersonas(prev => prev.filter(p => p.id !== personaId));
-            setComparisonSelection(prev => prev.filter(id => id !== personaId));
+            setSelection(prev => prev.filter(id => id !== personaId));
         }
     };
 
-    const handleToggleCompare = (personaId: string) => {
-        setComparisonSelection(prev => {
+    const handleToggleSelection = (personaId: string) => {
+        setSelection(prev => {
             if (prev.includes(personaId)) {
                 return prev.filter(id => id !== personaId);
             }
@@ -290,7 +160,37 @@ const App: React.FC = () => {
         });
     };
     
-    const selectedForComparison = personas.filter(p => comparisonSelection.includes(p.id));
+    const handleLaunchStudio = () => {
+        if (selection.length !== 2) return;
+        const personaA = personas.find(p => p.id === selection[0]);
+        const personaB = personas.find(p => p.id === selection[1]);
+
+        if (personaA && personaB) {
+            // Ensure order is consistent if user selects B then A
+            const orderedPersonas = personas.filter(p => selection.includes(p.id)) as [Persona, Persona];
+            setDialoguePersonas(orderedPersonas);
+            setCurrentView('dialogueStudio');
+        } else {
+            setError("Could not find the selected personas.");
+        }
+    };
+
+    const selectedForComparison = personas.filter(p => selection.includes(p.id));
+
+    if (currentView === 'dialogueStudio' && dialoguePersonas) {
+        return (
+            <DialogueStudio
+                initialPersonas={dialoguePersonas}
+                onBack={() => {
+                    setCurrentView('main');
+                    setDialoguePersonas(null);
+                }}
+                onPersonaUpdate={handleSave} // Re-use the main save logic
+                model={model}
+                thinkingBudget={parseThinkingBudget(thinkingBudget)}
+            />
+        );
+    }
 
     return (
         <div className="min-h-screen bg-[#212934] text-gray-200 font-sans p-4 sm:p-6 lg:p-8">
@@ -337,30 +237,10 @@ const App: React.FC = () => {
                         error={error}
                         showWelcome={showWelcome}
 
-                        comparisonSelection={comparisonSelection}
-                        onToggleCompare={handleToggleCompare}
+                        selection={selection}
+                        onToggleSelection={handleToggleSelection}
+                        onLaunchStudio={handleLaunchStudio}
                         setIsComparisonModalOpen={setIsComparisonModalOpen}
-
-                        dialogueTopic={dialogueTopic}
-                        setDialogueTopic={setDialogueTopic}
-                        showContext={showContext}
-                        setShowContext={setShowContext}
-                        showLength={showLength}
-                        setShowLength={setShowLength}
-                        handleGenerateDialogue={handleGenerateDialogue}
-                        isGeneratingDialogue={isGeneratingDialogue}
-                        
-                        script={script}
-                        viewMode={viewMode}
-                        setViewMode={setViewMode}
-                        editingTurnId={editingTurnId}
-                        setEditingTurnId={setEditingTurnId}
-                        refinePrompt={refinePrompt}
-                        setRefinePrompt={setRefinePrompt}
-                        handleRefineTurn={handleRefineTurn}
-                        isRefining={isRefining}
-                        handleGenerateNextTurn={handleGenerateNextTurn}
-                        isAddingLine={isAddingLine}
 
                         editingPersonaId={editingPersonaId}
                         onEdit={handleEdit}
