@@ -1,0 +1,6 @@
+{
+  "name": "SFL-Document-to-Persona-Generator",
+  "description": "An application that analyzes source documents using Systemic Functional Linguistics (SFL) principles to automatically generate detailed persona characteristics for dialogue generation.",
+  "requestFramePermissions": [],
+  "prompt": ""
+}
