@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { PersonaConfiguration } from '../types';
+import { Persona, PersonaConfiguration } from '../types';
 import { IdeationalIcon } from './icons/IdeationalIcon';
 import { InterpersonalIcon } from './icons/InterpersonalIcon';
 import { TextualIcon } from './icons/TextualIcon';
@@ -9,8 +9,7 @@ import { XCircleIcon } from './icons/XCircleIcon';
 
 
 interface PersonaOutputProps {
-    personaName: string;
-    config: PersonaConfiguration;
+    persona: Persona;
     onEdit: () => void;
     onDelete?: () => void;
 }
@@ -22,8 +21,9 @@ const SettingItem: React.FC<{ label: string; value: React.ReactNode }> = ({ labe
     </div>
 );
 
-export const PersonaOutput: React.FC<PersonaOutputProps> = ({ personaName, config, onEdit, onDelete }) => {
+export const PersonaOutput: React.FC<PersonaOutputProps> = ({ persona, onEdit, onDelete }) => {
     const [copied, setCopied] = useState(false);
+    const config = persona.analysis.personaConfiguration;
 
     const handleCopy = () => {
         const jsonString = JSON.stringify(config, null, 2);
@@ -34,15 +34,18 @@ export const PersonaOutput: React.FC<PersonaOutputProps> = ({ personaName, confi
 
     return (
         <div className="bg-[#333e48] rounded-xl shadow-lg p-6">
-            <div className="flex justify-between items-center mb-4 gap-2 flex-wrap">
-                <h2 className="text-2xl font-bold text-gray-200">Configuration: <span className="text-[#e2a32d]">{personaName}</span></h2>
-                <div className="flex items-center gap-2">
+            <div className="flex justify-between items-start mb-4 gap-2 flex-wrap">
+                <div>
+                    <h2 className="text-2xl font-bold text-gray-200">Configuration: <span className="text-[#e2a32d]">{persona.name}</span></h2>
+                    {persona.description && <p className="text-sm text-[#95aac0] mt-1 italic">{persona.description}</p>}
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
                      <button
                         onClick={onEdit}
                         className="flex items-center gap-2 px-3 py-1.5 text-sm bg-[#c36e26] hover:bg-[#e2a32d] text-white rounded-md transition-colors"
                     >
                         <EditIcon className="w-4 h-4" />
-                        Edit
+                        Edit Config
                     </button>
                     <button
                         onClick={handleCopy}

@@ -413,8 +413,7 @@ export const DialogueStudio: React.FC<DialogueStudioProps> = ({ initialPersonas,
                                 />
                             ) : (
                                 <PersonaOutput
-                                    personaName={persona.name}
-                                    config={persona.analysis.personaConfiguration}
+                                    persona={persona}
                                     onEdit={() => setEditingPersonaId(persona.id)}
                                 />
                             )}

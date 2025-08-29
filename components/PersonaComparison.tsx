@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Persona } from '../types';
 import { XCircleIcon } from './icons/XCircleIcon';
@@ -30,7 +29,10 @@ const ComparisonColumn: React.FC<{ persona: Persona }> = ({ persona }) => {
 
     return (
         <div className="flex flex-col">
-            <h3 className="text-2xl font-bold text-[#e2a32d] mb-4 text-center">{persona.name}</h3>
+            <div className="text-center mb-4">
+                <h3 className="text-2xl font-bold text-[#e2a32d]">{persona.name}</h3>
+                {persona.description && <p className="text-sm text-[#95aac0] mt-1 italic">{persona.description}</p>}
+            </div>
             
             <div className="bg-[#212934] rounded-lg p-4 mb-6">
                 <h4 className="font-semibold text-lg text-gray-200 mb-2 border-b border-[#5c6f7e] pb-2">SFL Analysis</h4>

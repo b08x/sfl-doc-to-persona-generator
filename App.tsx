@@ -31,7 +31,7 @@ const App: React.FC = () => {
 
     // Persona builder state
     const [editingPersonaId, setEditingPersonaId] = useState<string | null>(null);
-    const [draftConfig, setDraftConfig] = useState<PersonaConfiguration | null>(null);
+    const [editingPersonaDetailsId, setEditingPersonaDetailsId] = useState<string | null>(null);
 
     // Persona selection state (for comparison or dialogue)
     const [selection, setSelection] = useState<string[]>([]);
@@ -90,6 +90,7 @@ const App: React.FC = () => {
         setError(null);
         setShowWelcome(false);
         setEditingPersonaId(null);
+        setEditingPersonaDetailsId(null);
         setSelection([]);
 
         try {
@@ -97,6 +98,7 @@ const App: React.FC = () => {
             const newPersona: Persona = {
                 id: `persona-${Date.now()}`,
                 name: `Persona ${personas.length + 1}`,
+                description: '',
                 analysis: result,
             };
             setPersonas(prev => [...prev, newPersona]);
@@ -112,16 +114,21 @@ const App: React.FC = () => {
     }, [personas.length, model, thinkingBudget, parseThinkingBudget]);
 
     const handleEdit = (personaId: string) => {
-        const personaToEdit = personas.find(p => p.id === personaId);
-        if (personaToEdit) {
-            setDraftConfig(JSON.parse(JSON.stringify(personaToEdit.analysis.personaConfiguration)));
-            setEditingPersonaId(personaId);
-        }
+        setEditingPersonaId(personaId);
+        setEditingPersonaDetailsId(null); // Close details editor if open
     };
     
     const handleCancel = () => {
         setEditingPersonaId(null);
-        setDraftConfig(null);
+    };
+    
+    const handleCancelDetails = () => {
+        setEditingPersonaDetailsId(null);
+    };
+    
+    const handleEditDetails = (personaId: string) => {
+        setEditingPersonaDetailsId(personaId);
+        setEditingPersonaId(null); // Close config editor if open
     };
 
     const handleSave = (personaId: string, newConfig: PersonaConfiguration) => {
@@ -138,7 +145,11 @@ const App: React.FC = () => {
             return p;
         }));
         setEditingPersonaId(null);
-        setDraftConfig(null);
+    };
+
+    const handleSaveDetails = (personaId: string, updates: { name: string; description: string }) => {
+        setPersonas(prev => prev.map(p => (p.id === personaId ? { ...p, ...updates } : p)));
+        setEditingPersonaDetailsId(null);
     };
 
     const handleDelete = (personaId: string) => {
@@ -146,6 +157,19 @@ const App: React.FC = () => {
             setPersonas(prev => prev.filter(p => p.id !== personaId));
             setSelection(prev => prev.filter(id => id !== personaId));
         }
+    };
+    
+     const handleReorder = (dragId: string, dropId: string) => {
+        const dragIndex = personas.findIndex(p => p.id === dragId);
+        const dropIndex = personas.findIndex(p => p.id === dropId);
+        if (dragIndex === -1 || dropIndex === -1) return;
+        
+        setPersonas(prev => {
+            const newPersonas = [...prev];
+            const [draggedItem] = newPersonas.splice(dragIndex, 1);
+            newPersonas.splice(dropIndex, 0, draggedItem);
+            return newPersonas;
+        });
     };
 
     const handleToggleSelection = (personaId: string) => {
@@ -162,13 +186,9 @@ const App: React.FC = () => {
     
     const handleLaunchStudio = () => {
         if (selection.length !== 2) return;
-        const personaA = personas.find(p => p.id === selection[0]);
-        const personaB = personas.find(p => p.id === selection[1]);
-
-        if (personaA && personaB) {
-            // Ensure order is consistent if user selects B then A
-            const orderedPersonas = personas.filter(p => selection.includes(p.id)) as [Persona, Persona];
-            setDialoguePersonas(orderedPersonas);
+        const selectedPersonas = personas.filter(p => selection.includes(p.id)) as [Persona, Persona];
+        if (selectedPersonas.length === 2) {
+            setDialoguePersonas(selectedPersonas);
             setCurrentView('dialogueStudio');
         } else {
             setError("Could not find the selected personas.");
@@ -247,6 +267,12 @@ const App: React.FC = () => {
                         onCancel={handleCancel}
                         onSave={handleSave}
                         onDelete={handleDelete}
+                        onReorder={handleReorder}
+                        
+                        editingPersonaDetailsId={editingPersonaDetailsId}
+                        onEditDetails={handleEditDetails}
+                        onSaveDetails={handleSaveDetails}
+                        onCancelDetails={handleCancelDetails}
                     />
                 </main>
             </div>

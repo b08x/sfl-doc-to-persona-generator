@@ -1,4 +1,5 @@
 
+
 export interface ProcessDistribution {
   material: number;
   mental: number;
@@ -70,6 +71,7 @@ export interface FullAnalysisResult {
 export interface Persona {
   id: string;
   name: string;
+  description: string;
   analysis: FullAnalysisResult;
 }
 
