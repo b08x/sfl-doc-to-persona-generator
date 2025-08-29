@@ -92,50 +92,27 @@ const analysisSchema = {
 
 const constructPrompt = (text: string): string => {
   return `
-    You are an expert in Systemic Functional Linguistics (SFL). Your task is to analyze the following source document, map the linguistic features to a persona profile, and generate a detailed persona configuration. Follow these steps precisely and return the output as a single, valid JSON object that adheres to the provided schema.
+    Analyze the following source document from the perspective of Systemic Functional Linguistics (SFL).
+    Based on your analysis, generate a single, valid JSON object that conforms to the provided schema.
+    Your task is to populate all fields of the JSON schema with values derived from the document's linguistic features.
 
     **Source Document:**
     """
     ${text}
     """
 
-    **Step 1: SFL Feature Extraction**
-    Analyze the source document based on the following SFL framework.
+    **Instructions for JSON Generation:**
+    1.  **sflAnalysis**:
+        *   \`processDistribution\`: Calculate the percentage of Material, Mental, Relational, and Verbal processes. The sum must be 100.
+        *   \`technicality\`: Score from 1-10 and provide a brief justification.
+        *   \`modalityProfile\`, \`appraisalSummary\`, \`cohesionSummary\`: Provide concise summaries based on the document's language.
+    2.  **personaMapping**:
+        *   Synthesize a communication \`style\`, \`confidence\` level, \`stance\`, and \`organization\` approach from the SFL analysis. For example, a document high in relational processes might suggest a 'Definitional' style.
+    3.  **personaConfiguration**:
+        *   Translate the SFL analysis into specific numerical and string values for each field under \`ideational\`, \`interpersonal\`, and \`textual\` settings. This is a direct translation of the linguistic features into a configuration profile.
+        *   Ensure all percentages sum to 100 where required (e.g., process distribution, speech functions).
 
-    **A. Ideational Analysis:**
-    1.  **Process Type Identification:** Categorize verbs/predicates and calculate the percentage distribution for:
-        *   **Material Processes:** Actions/Events (e.g., develop, implement, construct, occur).
-        *   **Mental Processes:** Cognition/Perception (e.g., think, believe, understand, see, suggest).
-        *   **Relational Processes:** Being/Having (e.g., is, has, becomes, represents, equals).
-        *   **Verbal Processes:** Communication (e.g., say, tell, report, argue, claim).
-        *   The sum of these four percentages MUST be 100.
-    2.  **Technicality Measurement:** Calculate a lexical density score on a 1-10 scale where 1 is conversational and 10 is highly technical. Provide a brief description for the score.
-
-    **B. Interpersonal Feature Analysis:**
-    1.  **Modality Pattern Recognition:** Analyze modal verbs and expressions to summarize the document's modality profile (e.g., high certainty, low obligation).
-    2.  **Appraisal System Analysis:** Briefly summarize the use of evaluative language (Affect, Judgement, Appreciation).
-
-    **C. Textual Organization Analysis:**
-    1.  **Cohesion Pattern:** Briefly summarize the primary cohesive devices used (e.g., reference chains, lexical repetition, conjunctions).
-
-
-    **Step 2: Mapping Algorithms**
-    Apply the following algorithms to map the SFL analysis to a persona profile.
-
-    **A. Ideational Mapping -> Persona Style:**
-    *   IF Relational Processes > 50% -> Style: "Definitional Expert"
-    *   ELIF Material Processes > 40% -> Style: "Action-Oriented Practitioner"
-    *   ELIF Mental Processes > 35% -> Style: "Reflective Analyst"
-    *   ELIF Verbal Processes > 20% -> Style: "Research Communicator"
-    *   ELSE -> Style: "Balanced Generalist"
-
-    **B. Use the analysis to determine:**
-    *   **Confidence:** (e.g., Highly Certain, Moderately Certain, Cautious)
-    *   **Stance:** (e.g., Contemplative and Evaluative, Practical and Systematic)
-    *   **Organization:** (e.g., Exploratory Questioning, Sequential Building)
-
-    **Step 3: Generate Persona Configuration**
-    Based on the SFL analysis and mapping, generate a detailed persona configuration with specific scores and settings according to the required JSON schema.
+    The output must be ONLY the JSON object, without any surrounding text or markdown.
     `;
 };
 
@@ -164,8 +141,11 @@ export const analyzeDocument = async (text: string, model: string, thinkingBudge
             config,
         });
         
-        if (!response || !response.text) {
-            throw new Error("The API returned an empty response. This may be due to content safety filters or other issues.");
+        if (!response.text) {
+             if (response.promptFeedback?.blockReason) {
+                throw new Error(`The request was blocked by content safety filters. Reason: ${response.promptFeedback.blockReason}. Please modify the document and try again.`);
+            }
+            throw new Error("The API returned an empty response. This is often caused by the model failing to generate a valid JSON that conforms to the schema. Please try with a different or simplified document.");
         }
 
         const jsonStr = response.text.trim();
@@ -357,7 +337,7 @@ export const refineDialogueTurn = async (originalText: string, personaConfig: Pe
     }
 };
 
-const constructNextLinePrompt = (history: DialogueTurn[], nextSpeaker: 'Speaker A' | 'Speaker B', config: PersonaConfiguration): string => {
+const constructNextLinePrompt = (history: DialogueTurn[], nextSpeaker: 'Speaker A' | 'Speaker B', config: PersonaConfiguration, userPrompt: string): string => {
     const historyText = history.map(turn => `${turn.speaker}: ${turn.text}`).join('\n');
 
     return `
@@ -370,24 +350,27 @@ You are ${nextSpeaker}. You must adopt the following SFL persona configuration.
 *   **Textual Profile:** Lexical Density: ${config.textual.lexicalDensity}/10; Grammatical Intricacy: ${config.textual.grammaticalIntricacy}/10.
 
 **Task:**
-Based on the dialogue history below, generate a single, logical next line for your character (${nextSpeaker}).
+Based on the dialogue history below and the following user instruction, generate a single, logical next line for your character (${nextSpeaker}).
 
 **Dialogue History:**
 ${historyText}
 
+**User Instruction:**
+"${userPrompt}"
+
 **Output Rules:**
 1.  Return **only the new dialogue line**.
 2.  Do **not** add any prefixes like "Speaker A:" or explanations.
-3.  Ensure the new line is a natural continuation of the conversation and strictly adheres to your persona.
+3.  Ensure the new line is a natural continuation of the conversation and strictly adheres to your persona and the user instruction.
 `;
 }
 
-export const generateNextDialogueTurn = async (history: DialogueTurn[], nextSpeaker: 'Speaker A' | 'Speaker B', personaConfig: PersonaConfiguration, model: string, thinkingBudget?: number): Promise<string> => {
+export const generateNextDialogueTurn = async (history: DialogueTurn[], nextSpeaker: 'Speaker A' | 'Speaker B', personaConfig: PersonaConfiguration, userPrompt: string, model: string, thinkingBudget?: number): Promise<string> => {
     if (!process.env.API_KEY) {
         throw new Error("API_KEY environment variable not set");
     }
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const prompt = constructNextLinePrompt(history, nextSpeaker, personaConfig);
+    const prompt = constructNextLinePrompt(history, nextSpeaker, personaConfig, userPrompt);
 
     const config: { [key: string]: any } = {
         temperature: 0.7

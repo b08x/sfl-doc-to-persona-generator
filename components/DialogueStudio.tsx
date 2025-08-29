@@ -8,6 +8,7 @@ import { PromptEditIcon } from './icons/PromptEditIcon';
 import { PlusCircleIcon } from './icons/PlusCircleIcon';
 import { FinalizeIcon } from './icons/FinalizeIcon';
 import { EditIcon } from './icons/EditIcon';
+import { ClipboardIcon } from './icons/ClipboardIcon';
 
 
 interface DialogueStudioProps {
@@ -28,22 +29,44 @@ const ScriptEditor: React.FC<{
     setRefinePrompt: (prompt: string) => void;
     onRefine: () => void;
     isRefining: string | null;
-    onAddLine: () => void;
-    isAddingLine: boolean;
+    
+    // Props for adding a new line
+    isAddingLineMode: boolean;
+    setIsAddingLineMode: (mode: boolean) => void;
+    addLinePrompt: string;
+    setAddLinePrompt: (prompt: string) => void;
+    onAddLine: (prompt: string) => void;
+    isGeneratingNextLine: boolean;
 }> = ({
     script, viewMode, setViewMode, editingTurnId, setEditingTurnId,
-    refinePrompt, setRefinePrompt, onRefine, isRefining, onAddLine, isAddingLine
+    refinePrompt, setRefinePrompt, onRefine, isRefining,
+    isAddingLineMode, setIsAddingLineMode, addLinePrompt, setAddLinePrompt, onAddLine, isGeneratingNextLine
 }) => {
     
+    const [copied, setCopied] = useState(false);
+
+    const handleCopy = () => {
+        const formattedScript = script.map(turn => `${turn.speaker} (${turn.personaName}): ${turn.text}`).join('\n\n');
+        navigator.clipboard.writeText(formattedScript);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
     if (viewMode === 'final') {
         return (
              <div className="mt-8">
-                <div className="flex justify-between items-center mb-4">
+                <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
                     <h3 className="text-xl font-semibold text-[#e2a32d]">Final Script</h3>
-                    <button onClick={() => setViewMode('editor')} className="flex items-center gap-2 px-3 py-1.5 text-sm bg-[#c36e26] hover:bg-[#e2a32d] text-white rounded-md transition-colors">
-                        <EditIcon className="w-4 h-4"/>
-                        Back to Editor
-                    </button>
+                    <div className="flex gap-2">
+                        <button onClick={handleCopy} className="flex items-center gap-2 px-3 py-1.5 text-sm bg-[#5c6f7e] hover:bg-[#95aac0] text-white rounded-md transition-colors">
+                            <ClipboardIcon className="w-4 h-4"/>
+                            {copied ? 'Copied!' : 'Copy Script'}
+                        </button>
+                        <button onClick={() => setViewMode('editor')} className="flex items-center gap-2 px-3 py-1.5 text-sm bg-[#c36e26] hover:bg-[#e2a32d] text-white rounded-md transition-colors">
+                            <EditIcon className="w-4 h-4"/>
+                            Back to Editor
+                        </button>
+                    </div>
                 </div>
                 <div className="bg-[#212934] rounded-lg p-4 whitespace-pre-wrap text-gray-200 font-mono text-sm max-h-[500px] overflow-y-auto custom-scrollbar">
                     {script.map(turn => `${turn.speaker} (${turn.personaName}): ${turn.text}`).join('\n\n')}
@@ -100,14 +123,42 @@ const ScriptEditor: React.FC<{
                     </div>
                 ))}
             </div>
+             {isAddingLineMode && (
+                <div className="mt-4 pt-4 border-t border-[#5c6f7e] space-y-2 bg-[#212934] rounded-lg p-3">
+                    <label htmlFor="add-line-prompt" className="block text-sm font-medium text-[#95aac0]">
+                        Instruction for the next dialogue line:
+                    </label>
+                    <textarea
+                        id="add-line-prompt"
+                        value={addLinePrompt}
+                        onChange={(e) => setAddLinePrompt(e.target.value)}
+                        rows={2}
+                        placeholder={`e.g., Have them express doubt about the previous statement...`}
+                        className="w-full bg-[#333e48] border border-[#5c6f7e] rounded-md p-2 text-sm text-gray-200 focus:ring-1 focus:ring-[#e2a32d] focus:border-[#e2a32d]"
+                    />
+                    <div className="flex gap-2 justify-end">
+                        <button 
+                            onClick={() => { setIsAddingLineMode(false); setAddLinePrompt(''); }}
+                            className="px-3 py-1 text-xs bg-[#5c6f7e] rounded hover:bg-[#95aac0]"
+                        >Cancel</button>
+                        <button 
+                            onClick={() => onAddLine(addLinePrompt)}
+                            disabled={isGeneratingNextLine || !addLinePrompt.trim()}
+                            className="px-3 py-1 text-xs bg-[#c36e26] text-white rounded hover:bg-[#e2a32d] disabled:bg-[#5c6f7e] flex items-center justify-center w-20"
+                        >
+                            {isGeneratingNextLine ? <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div> : 'Generate'}
+                        </button>
+                    </div>
+                </div>
+            )}
              <div className="mt-4 pt-4 border-t border-[#5c6f7e] flex justify-between gap-4">
                 <button
-                    onClick={onAddLine}
-                    disabled={isAddingLine}
+                    onClick={() => setIsAddingLineMode(true)}
+                    disabled={isAddingLineMode}
                     className="flex items-center gap-2 px-4 py-2 text-sm bg-[#5c6f7e] hover:bg-[#95aac0] text-white rounded-md transition-colors disabled:opacity-50"
                 >
                     <PlusCircleIcon className="w-5 h-5"/>
-                    {isAddingLine ? 'Adding...' : 'Add Dialogue Line'}
+                    Add Dialogue Line
                 </button>
                 <button
                     onClick={() => setViewMode('final')}
@@ -139,7 +190,11 @@ export const DialogueStudio: React.FC<DialogueStudioProps> = ({ initialPersonas,
     const [editingTurnId, setEditingTurnId] = useState<string | null>(null);
     const [refinePrompt, setRefinePrompt] = useState('');
     const [isRefining, setIsRefining] = useState<string | null>(null);
-    const [isAddingLine, setIsAddingLine] = useState<boolean>(false);
+    
+    // Add-line state
+    const [isAddingLineMode, setIsAddingLineMode] = useState<boolean>(false);
+    const [addLinePrompt, setAddLinePrompt] = useState<string>('');
+    const [isGeneratingNextLine, setIsGeneratingNextLine] = useState<boolean>(false);
 
     // Update internal state if props change
     React.useEffect(() => {
@@ -243,10 +298,10 @@ export const DialogueStudio: React.FC<DialogueStudioProps> = ({ initialPersonas,
         }
     };
 
-    const handleGenerateNextTurn = async () => {
-        if (script.length === 0) return;
+    const handleGenerateNextTurn = async (userPrompt: string) => {
+        if (script.length === 0 || !userPrompt.trim()) return;
         
-        setIsAddingLine(true);
+        setIsGeneratingNextLine(true);
         setError(null);
         
         try {
@@ -257,7 +312,7 @@ export const DialogueStudio: React.FC<DialogueStudioProps> = ({ initialPersonas,
             
             const history = script.slice(-4);
             
-            const newText = await generateNextDialogueTurn(history, nextSpeaker, nextSpeakerConfig, model, thinkingBudget);
+            const newText = await generateNextDialogueTurn(history, nextSpeaker, nextSpeakerConfig, userPrompt, model, thinkingBudget);
             
             const newTurn: DialogueTurn = {
                 id: `turn-${Date.now()}`,
@@ -267,6 +322,8 @@ export const DialogueStudio: React.FC<DialogueStudioProps> = ({ initialPersonas,
             };
             
             setScript(prev => [...prev, newTurn]);
+            setIsAddingLineMode(false);
+            setAddLinePrompt('');
 
         } catch (e) {
             if (e instanceof Error) {
@@ -275,7 +332,7 @@ export const DialogueStudio: React.FC<DialogueStudioProps> = ({ initialPersonas,
                 setError('An unknown error occurred while adding a new line.');
             }
         } finally {
-            setIsAddingLine(false);
+            setIsGeneratingNextLine(false);
         }
     };
     
@@ -386,8 +443,12 @@ export const DialogueStudio: React.FC<DialogueStudioProps> = ({ initialPersonas,
                             setRefinePrompt={setRefinePrompt}
                             onRefine={handleRefineTurn}
                             isRefining={isRefining}
+                            isAddingLineMode={isAddingLineMode}
+                            setIsAddingLineMode={setIsAddingLineMode}
+                            addLinePrompt={addLinePrompt}
+                            setAddLinePrompt={setAddLinePrompt}
                             onAddLine={handleGenerateNextTurn}
-                            isAddingLine={isAddingLine}
+                            isGeneratingNextLine={isGeneratingNextLine}
                         />
                     </div>
                 )}
